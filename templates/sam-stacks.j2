@@ -1,0 +1,71 @@
+---
+Transform: AWS::Serverless-2016-10-31
+Parameters:
+
+    VpcId:
+        Description: The VPC where to put the servers in
+        Type: String
+
+    SubnetIds:
+        Description: The Subnet ID's
+        Type: String
+
+Resources:
+    LambdaApp{{ sceptre_user_data.AppName }}:
+        Type: AWS::Serverless::Function
+        Properties:
+           Handler: lambda_function.lambda_handler
+           FunctionName: "{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}"
+           Description: "{{ sceptre_user_data.Description }}"
+           Environment:
+               Variables:
+                  Environment: {{ sceptre_user_data.EnvName }}
+           CodeUri: "s3://xlsreport-test-codebucket/80a8dfe0c3bfdfad89723fde1f83cd03"
+           Runtime: python3.8
+           Timeout: 180
+           MemorySize: 128
+           Policies:
+              - AWSCertificateManagerReadOnly
+              - AWSLambdaVPCAccessExecutionRole
+              - Statement:
+                - Sid: CWSSLCheckAlarmAccess
+                  Effect: Allow
+                  Action:
+                  - CloudWatch:SetAlarmState
+                  - secretsmanager:GetSecretValue
+                  - kms:GetPublicKey
+                  - kms:Decrypt
+                  - sqs:SendMessageBatch
+                  - sqs:SendMessage
+                  - sqs:ReceiveMessage
+                  - sqs:DeleteMessage
+                  - sqs:GetQueueAttributes
+                  Resource: '*'
+                - Sid: S3Access
+                  Effect: Allow
+                  Action:
+                  - s3:GetObject
+                  Resource: 'arn:aws:s3:::lambda-{{ sceptre_user_data.AppName }}-code/*'
+           Layers:
+           - !Ref Pandaslibs
+           Events:
+              ScheduleEvent:
+                Type: Schedule
+                Properties: 
+                    Schedule: "rate(10 minutes)"
+                    Name: Schedule{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}
+                    Description: 'Schedule for {{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }} Lambda' 
+                    Enabled: False
+
+    Pandaslibs:
+        Type: AWS::Lambda::LayerVersion
+        Properties:
+          LayerName: pandas
+          Description: Dependencies for the {{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}
+          Content:
+            S3Bucket: lambda-4595
+            S3Key: pandas-1.3.2.zip
+          CompatibleRuntimes:
+            - python3.6
+            - python3.7
+            - python3.8

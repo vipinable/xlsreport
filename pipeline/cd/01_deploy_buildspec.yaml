@@ -1,0 +1,18 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+    - pip install 'boto3==1.15.0' 'sceptre==2.3.0' 'urllib3==1.25.11'
+
+  pre_build:
+    commands:
+    - echo "Skipping this stage as no action defined" 
+
+  build:
+    commands:
+    - sceptre launch -y ${Environment}/combomon-sam.yaml
+
+  post_build:
+    commands:
+    - echo "Skipping this stage as no action defined"

@@ -1,0 +1,22 @@
+template_path: sam-stacks.j2
+parameters:
+    VpcId: 'vpc-00000000000000000'
+    SubnetIds: ['subnet-00000000000','subnet-00000000000000000','subnet-00000000000']      
+
+sceptre_user_data:
+    AppName: 'xlsreport'
+    Description: 'Lambda to process google sheeets'
+    EnvName: 'test'
+    EmailIds: '"vipinable@gmail.com"'
+    SgEgress:
+    - { cidr: '0.0.0.0/21', prot: 'tcp', sport: '0', tport: '65535', desc: 'Allow all outbound traffic inside VPC' }
+    - { cidr: '0.0.0.0/0', prot: 'tcp', sport: '443', tport: '443', desc: 'Allow SSL outbound traffic' }
+
+dependencies:
+  - test/codezip-s3.yaml
+
+hooks:
+  before_update:
+  - !cmd sed -i s%\"s3:.*%$(aws cloudformation package --template-file artifact.yaml --s3-bucket xlsreport-test-codebucket --use-json | jq .Resources.Artifacts.Properties.CodeUri)% templates/sam-stacks.j2
+  before_create:
+  - !cmd sed -i s%\"s3:.*%$(aws cloudformation package --template-file artifact.yaml --s3-bucket xlsreport-test-codebucket --use-json | jq .Resources.Artifacts.Properties.CodeUri)% templates/sam-stacks.j2

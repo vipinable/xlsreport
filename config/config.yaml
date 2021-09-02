@@ -1,0 +1,3 @@
+project_code: 'sceptre'
+region: 'us-east-1'
+stack_tags: {'Application': 'xlsreport', 'Squard':'pegasus'}

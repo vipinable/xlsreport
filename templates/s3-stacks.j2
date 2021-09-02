@@ -1,0 +1,112 @@
+---
+AWSTemplateFormatVersion: 2010-09-09
+
+Resources:
+#    s3Key{{ sceptre_user_data.AppName }}:
+#      Type: AWS::KMS::Key
+#      Properties:
+#        EnableKeyRotation: true
+#        KeyPolicy:
+#          Version: 2012-10-17
+#          Id: key-s3
+#          Statement:
+#            - Sid: Enable IAM User Permissions
+#              Effect: Allow
+#              Principal:
+#                AWS: !Join
+#                  - ""
+#                  - - "arn:aws:iam::"
+#                    - !Ref "AWS::AccountId"
+#                    - ":root"
+#              Action: "kms:*"
+#              Resource: "*"
+#    # create a KMS alias, using a alias will make coding easier and gives the opportunity to change KMS keys without impacting the code
+#    s3KeyAlias{{ sceptre_user_data.AppName }}:
+#      Type: AWS::KMS::Alias
+#      Properties:
+#        AliasName: alias/s3{{ sceptre_user_data.AppName }}{{ sceptre_user_data.EnvName }}
+#        TargetKeyId:
+#            Ref: s3Key{{ sceptre_user_data.AppName }}
+
+    S3Bucket{{ sceptre_user_data.AppName }}:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: {{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}-codebucket
+        # data in S3 buckets needs to be enrypted with KMS as best practice
+        BucketEncryption:
+            ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault: 
+                SSEAlgorithm: 'AES256' 
+
+        AccessControl: BucketOwnerFullControl
+        # a lifecycle policy needs to be configured on the S3 bucket as best practice
+        # in this example:
+        #   non current object will be deleted after 365 day
+        #   not completed multipart uploads will be deleted after 7 days
+        #   objects will be moved to Infrequently accessed S3 after 30 days
+        #   objects will be moved to Glacier after 90 days
+        LifecycleConfiguration:
+          Rules:
+           -  AbortIncompleteMultipartUpload:
+                DaysAfterInitiation: 7
+              NoncurrentVersionExpirationInDays: 365
+              Status: Enabled
+              Transitions:
+               -  StorageClass: STANDARD_IA
+                  TransitionInDays: 30
+               -  StorageClass: GLACIER
+                  TransitionInDays: 90
+        # public access should not be enabled for all data clasified other than "general public data" 
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: true
+          BlockPublicPolicy: true
+          IgnorePublicAcls: true
+          RestrictPublicBuckets: true
+        # All S3 buckets should be configured with a security:DataClassification tag explaining what kind of data is hosted in the S3 bucket
+        Tags:
+         -  Key: security:DataClassification
+            Value: Non-Public
+        # versioning should be enabled on all S3 buckets, this makes sure data loss can be prevented 
+        VersioningConfiguration:
+          Status: Enabled
+        # Object lock should be enabled on all S3 buckets, this will prevent data loss in event of (for example) ransomware
+        #ObjectLockConfiguration:
+        #  ObjectLockEnabled: Disabled
+        #  Rule:
+        #    DefaultRetention:
+        #      Mode: COMPLIANCE
+        #      Days: 7
+        #ObjectLockEnabled: False
+
+
+    # create a bucketpolicy for the s3 bucket
+    S3BucketPolicy{{ sceptre_user_data.AppName }}:
+      Type: AWS::S3::BucketPolicy
+      Properties:
+        Bucket: !Ref S3Bucket{{ sceptre_user_data.AppName }}
+        PolicyDocument:
+          Statement:
+            # Don't allow requests other than SSL
+            - Sid: AllowSSLRequestsOnly
+              Action: s3:*
+              Effect: Deny
+              Resource: !Join
+                 - ''
+                 -  - 'arn:aws:s3:::'
+                    - !Ref S3Bucket{{ sceptre_user_data.AppName }}
+                    - /*
+              Condition:
+                Bool:
+                  aws:SecureTransport: 'false'
+              Principal: "*"
+            # allow the entire AWS account access to the S3 bucket; this can/should be more fine grained if possible
+            - Sid: WholeAccountCanAccess
+              Effect: Allow
+              Principal:
+                AWS: !Join
+                  - ''
+                  - - 'arn:aws:iam::'
+                    - !Ref 'AWS::AccountId'
+                    - ':root'
+              Action: s3:*
+              Resource: !Join ["", ["arn:aws:s3:::", !Ref S3Bucket{{ sceptre_user_data.AppName }}]]

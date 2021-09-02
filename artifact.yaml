@@ -1,0 +1,9 @@
+#This is a temporary template to use aws package command. The location of the code is specified in the CodeUri line. 
+#Ref: https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/using-cfn-cli-package.html
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Resources:
+  Artifacts:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: code/
