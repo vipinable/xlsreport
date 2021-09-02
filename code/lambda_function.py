@@ -3,7 +3,6 @@ import datetime
 
 def lambda_handler(event, context):
     
-    url = 'https://docs.google.com/spreadsheets/d/1pz5WxHe8-YjhaMWKkXtz26dPFttfsm2BPv53mfay5I4/export?format=csv&gid=241921063'
     df = pd.read_csv(url)
     print(df)
     
