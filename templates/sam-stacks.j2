@@ -20,7 +20,7 @@ Resources:
            Environment:
                Variables:
                   Environment: {{ sceptre_user_data.EnvName }}
-           CodeUri: "s3://xlsreport-test-codebucket/80a8dfe0c3bfdfad89723fde1f83cd03"
+           CodeUri: s3://xlsreport-test-codebucket/xlsreport-b8ece627.zip
            Runtime: python3.8
            Timeout: 180
            MemorySize: 128
@@ -40,6 +40,7 @@ Resources:
                   - sqs:ReceiveMessage
                   - sqs:DeleteMessage
                   - sqs:GetQueueAttributes
+                  - sns:Publish
                   Resource: '*'
                 - Sid: S3Access
                   Effect: Allow
@@ -52,7 +53,7 @@ Resources:
               ScheduleEvent:
                 Type: Schedule
                 Properties: 
-                    Schedule: "rate(10 minutes)"
+                    Schedule: "cron(30 12 * * ? *)"
                     Name: Schedule{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}
                     Description: 'Schedule for {{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }} Lambda' 
                     Enabled: False
@@ -69,3 +70,11 @@ Resources:
             - python3.6
             - python3.7
             - python3.8
+
+
+    SNSTopic4xlsreport:
+        Type: AWS::SNS::Topic
+        Properties:
+          Subscription:
+          - Endpoint: "vipinable@gmail.com"
+            Protocol: email

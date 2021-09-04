@@ -17,6 +17,6 @@ dependencies:
 
 hooks:
   before_update:
-  - !cmd sed -i s%\"s3:.*%$(aws cloudformation package --template-file artifact.yaml --s3-bucket xlsreport-test-codebucket --use-json | jq .Resources.Artifacts.Properties.CodeUri)% templates/sam-stacks.j2
+  - !cmd sh codepush.sh xlsreport xlsreport-test-codebucket
   before_create:
-  - !cmd sed -i s%\"s3:.*%$(aws cloudformation package --template-file artifact.yaml --s3-bucket xlsreport-test-codebucket --use-json | jq .Resources.Artifacts.Properties.CodeUri)% templates/sam-stacks.j2
+  - !cmd sh codepush.sh xlsreport xlsreport-test-codebucket
