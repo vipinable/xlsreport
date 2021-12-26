@@ -4,29 +4,57 @@ Parameters:
 
     VpcId:
         Description: The VPC where to put the servers in
-        Type: String
+        Type: AWS::SSM::Parameter::Value<String>
 
     SubnetIds:
         Description: The Subnet ID's
-        Type: String
+        Type: AWS::SSM::Parameter::Value<String>
 
 Resources:
+
+    ApiGw{{ sceptre_user_data.AppName }}:
+        Type: AWS::ApiGateway::RestApi
+        Properties:
+          Description: Api gateway for xlsreport app
+          Name: apiGw{{ sceptre_user_data.AppName }}
+
+    ProxyResource:
+        Type: AWS::ApiGateway::Resource
+        Properties:
+          RestApiId: !Ref ApiGw{{ sceptre_user_data.AppName }}
+          ParentId: !GetAtt 
+            - ApiGw{{ sceptre_user_data.AppName }}
+            - RootResourceId
+          PathPart: '{proxy+}'
+
+    ProxyResourceANY:
+        Type: 'AWS::ApiGateway::Method'
+        Properties:
+          RestApiId: !Ref ApiGw{{ sceptre_user_data.AppName }}
+          ResourceId: !Ref ProxyResource
+          HttpMethod: ANY
+          AuthorizationType: NONE
+          Integration:
+            Type: AWS_PROXY
+            IntegrationHttpMethod: POST
+            Uri: !Sub >-
+              arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaApp{{ sceptre_user_data.AppName }}.Arn}/invocations
+
     LambdaApp{{ sceptre_user_data.AppName }}:
         Type: AWS::Serverless::Function
         Properties:
-           Handler: lambda_function.lambda_handler
+           Handler: main.lambda_handler
            FunctionName: "{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}"
            Description: "{{ sceptre_user_data.Description }}"
            Environment:
                Variables:
                   Environment: {{ sceptre_user_data.EnvName }}
-           CodeUri: s3://xlsreport-test-codebucket/xlsreport-b8ece627.zip
+                  SNSTOPIC: !Ref SNSTopic4xlsreport
+           CodeUri: s3://xlsreport-test-codebucket/src/xlsreport-fd3dd643.zip
            Runtime: python3.8
            Timeout: 180
            MemorySize: 128
            Policies:
-              - AWSCertificateManagerReadOnly
-              - AWSLambdaVPCAccessExecutionRole
               - Statement:
                 - Sid: CWSSLCheckAlarmAccess
                   Effect: Allow
@@ -35,18 +63,17 @@ Resources:
                   - secretsmanager:GetSecretValue
                   - kms:GetPublicKey
                   - kms:Decrypt
-                  - sqs:SendMessageBatch
-                  - sqs:SendMessage
-                  - sqs:ReceiveMessage
-                  - sqs:DeleteMessage
-                  - sqs:GetQueueAttributes
                   - sns:Publish
+                  - ses:SendEmail
+                  - ssm:GetParameter*
                   Resource: '*'
                 - Sid: S3Access
                   Effect: Allow
                   Action:
                   - s3:GetObject
-                  Resource: 'arn:aws:s3:::lambda-{{ sceptre_user_data.AppName }}-code/*'
+                  Resource: 
+                  - 'arn:aws:s3:::{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}-codebucket'
+                  - 'arn:aws:s3:::{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}-codebucket/*'
            Layers:
            - !Ref Pandaslibs
            Events:
@@ -71,6 +98,18 @@ Resources:
             - python3.7
             - python3.8
 
+    PublishLambdaApp{{ sceptre_user_data.AppName }}:
+        Type: AWS::Lambda::Version
+        Properties:
+            FunctionName: !Ref LambdaApp{{ sceptre_user_data.AppName }}
+
+    ProdLambdaApp{{ sceptre_user_data.AppName }}:
+        Type: AWS::Lambda::Alias
+        Properties: 
+            Description: "Production Alias"
+            FunctionName: !Ref LambdaApp{{ sceptre_user_data.AppName }}
+            FunctionVersion: !GetAtt PublishLambdaApp{{ sceptre_user_data.AppName }}.Version
+            Name: Active
 
     SNSTopic4xlsreport:
         Type: AWS::SNS::Topic
@@ -78,3 +117,47 @@ Resources:
           Subscription:
           - Endpoint: "vipinable@gmail.com"
             Protocol: email
+
+
+    S3WWW{{ sceptre_user_data.AppName }}:
+      Type: AWS::S3::Bucket
+      Properties:
+        BucketName: {{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}-www
+        BucketEncryption:
+            ServerSideEncryptionConfiguration:
+            - ServerSideEncryptionByDefault:
+                SSEAlgorithm: 'AES256'
+        AccessControl: BucketOwnerFullControl
+        LifecycleConfiguration:
+          Rules:
+           -  AbortIncompleteMultipartUpload:
+                DaysAfterInitiation: 7
+              NoncurrentVersionExpirationInDays: 7
+              ExpirationInDays: 365
+              Status: Enabled
+              Prefix: dailybkp
+              Transitions:
+               -  StorageClass: STANDARD_IA
+                  TransitionInDays: 30
+        PublicAccessBlockConfiguration:
+          BlockPublicAcls: False
+          BlockPublicPolicy: False
+          IgnorePublicAcls: False
+          RestrictPublicBuckets: False
+        Tags:
+         -  Key: security:DataClassification
+            Value: Public
+        VersioningConfiguration:
+          Status: Suspended
+
+Outputs:
+  StackVPC:
+    Description: The ID of the VPC
+    Value: !Ref VpcId
+    Export:
+      Name: !Sub "${AWS::StackName}-VPCID"
+  StackNET:
+    Description: The ID of the Subnets
+    Value: !Ref SubnetIds
+    Export:
+      Name: !Sub "${AWS::StackName}-SubNetID"

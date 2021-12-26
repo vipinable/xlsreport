@@ -32,44 +32,33 @@ Resources:
       Type: AWS::S3::Bucket
       Properties:
         BucketName: {{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}-codebucket
-        # data in S3 buckets needs to be enrypted with KMS as best practice
         BucketEncryption:
             ServerSideEncryptionConfiguration:
             - ServerSideEncryptionByDefault: 
                 SSEAlgorithm: 'AES256' 
 
         AccessControl: BucketOwnerFullControl
-        # a lifecycle policy needs to be configured on the S3 bucket as best practice
-        # in this example:
-        #   non current object will be deleted after 365 day
-        #   not completed multipart uploads will be deleted after 7 days
-        #   objects will be moved to Infrequently accessed S3 after 30 days
-        #   objects will be moved to Glacier after 90 days
         LifecycleConfiguration:
           Rules:
            -  AbortIncompleteMultipartUpload:
                 DaysAfterInitiation: 7
-              NoncurrentVersionExpirationInDays: 365
+              NoncurrentVersionExpirationInDays: 7
+              ExpirationInDays: 90
               Status: Enabled
+              Prefix: dailybkp
               Transitions:
                -  StorageClass: STANDARD_IA
                   TransitionInDays: 30
-               -  StorageClass: GLACIER
-                  TransitionInDays: 90
-        # public access should not be enabled for all data clasified other than "general public data" 
         PublicAccessBlockConfiguration:
           BlockPublicAcls: true
           BlockPublicPolicy: true
           IgnorePublicAcls: true
           RestrictPublicBuckets: true
-        # All S3 buckets should be configured with a security:DataClassification tag explaining what kind of data is hosted in the S3 bucket
         Tags:
          -  Key: security:DataClassification
             Value: Non-Public
-        # versioning should be enabled on all S3 buckets, this makes sure data loss can be prevented 
         VersioningConfiguration:
           Status: Enabled
-        # Object lock should be enabled on all S3 buckets, this will prevent data loss in event of (for example) ransomware
         #ObjectLockConfiguration:
         #  ObjectLockEnabled: Disabled
         #  Rule:

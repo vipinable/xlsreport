@@ -1,7 +1,7 @@
 template_path: sam-stacks.j2
 parameters:
-    VpcId: 'vpc-00000000000000000'
-    SubnetIds: ['subnet-00000000000','subnet-00000000000000000','subnet-00000000000']      
+    VpcId: 'DefautVPC'
+    SubnetIds: 'DefaultSubnetIDs'   
 
 sceptre_user_data:
     AppName: 'xlsreport'
