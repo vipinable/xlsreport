@@ -142,13 +142,11 @@ def dailyaccounts():
     print(type(html))
     sesmail(df.iloc[row].to_string(),html)
     
-def process_transations(tr,MonthData):
+def process_transations(tr,MonthData,ThisMonth):
     response = ssm.get_parameter(Name='meturl',WithDecryption=True)
     meturl = response['Parameter']['Value']
     print(meturl)
     df = pd.read_csv(meturl)
-    ThisMonth = datetime.datetime.today().strftime("%m/%Y")
-    #ThisMonth = '09/2021'
     for index, row in df.iterrows():
         rowlist = row.tolist()
         if rowlist[0].split()[0][-7:] == ThisMonth:
@@ -158,6 +156,7 @@ def process_transations(tr,MonthData):
     html = '<table cellspacing=”0” cellpadding=”0” width=”640” align=”center” border=”1”>' + tr
     print(MonthData)
     #ToDay = datetime.datetime.today().strftime("%d/%m/%Y")
+    DictTotal = {'sale': [], 'purchase': [], 'expense': [], 'deposit': [], 'diff': [], 'mvk': [], 'nvn': [], 'vsh': []}
     for key, value in MonthData.items():
         print(key)
         newtr = tr.replace('Date',key)
@@ -172,22 +171,47 @@ def process_transations(tr,MonthData):
         newtr = newtr.replace('UPI',str(round(sum(value['UPI']),2)))
         newtr = newtr.replace('Due',str(round(sum(value['Due']),2)))
         newtr = newtr.replace('Payments',str(round(sum(value['Cash']),2)))
-        newtr = newtr.replace('NN',str(sum(value['NVN'])))
-        newtr = newtr.replace('MH',str(sum(value['MVK'])))
+        newtr = newtr.replace('NVN',str(sum(value['NVN'])))
+        newtr = newtr.replace('MVK',str(sum(value['MVK'])))
+        newtr = newtr.replace('VSH',str(sum(value['VSH'])))
         
-        ActualCash = sum(value['Open Balance'] + value['Cash'] + value['Credit Received']) - sum(value['Expense'] + value['NVN'] + value['MVK'])
+        ActualCash = sum(value['Open Balance'] + value['Cash'] + value['Credit Received']) - sum(value['Expense'] + value['NVN'] + value['MVK'] + value['VSH'])
         Cashdiff = sum(value['Close Balance']) - ActualCash
         newtr = newtr.replace('Diff',str(round(Cashdiff,2)))
         
         html = html + newtr
+        
+        DictTotal['sale'].append(round(sum(value['Cash'] + value['UPI'] + value['Due']),2))
+        DictTotal['purchase'].append(sum(value['Purchase']))
+        DictTotal['expense'].append(sum(value['Expense']))
+        DictTotal['deposit'].append(sum(value['Deposit']))
+        if Cashdiff < 0:
+            DictTotal['diff'].append(round(Cashdiff,2))
+        DictTotal['mvk'].append(sum(value['MVK']))
+        DictTotal['nvn'].append(sum(value['NVN']))
+        DictTotal['vsh'].append(sum(value['VSH']))
+    
+    pl = sum(DictTotal['sale']) - sum(DictTotal['purchase'] + DictTotal['expense'] + DictTotal['mvk'] + DictTotal['nvn'] + DictTotal['vsh'])
+        
+    html = html + '</table>'
+    html = html + '<table cellspacing=”0” cellpadding=”0” align=”left” border=”1”>'
+    html = html + '<tr><td><h2>Total Sale</h2></td><td><h2>' + str(round(sum(DictTotal['sale']),2)) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total Purchase</h2></td><td><h2>' + str(sum(DictTotal['purchase'])) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total Expense</h2></td><td><h2>' + str(sum(DictTotal['expense'])) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total Deposit</h2></td><td><h2>' + str(sum(DictTotal['deposit'])) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total MVK</h2></td><td><h2>' + str(sum(DictTotal['mvk'])) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total NVN</h2></td><td><h2>' + str(sum(DictTotal['nvn'])) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total VSH</h2></td><td><h2>' + str(sum(DictTotal['vsh'])) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total Diff</h2></td><td><h2>' + str(sum(DictTotal['diff'])) + '</h2></td></tr>'
+    #html = html + '<tr><td><h2>Profit/Loss</h2></td><td><h2>' + str(round(pl,2)) + '</h2></td></tr>'
     html = html + '</table>'
     
     sesmail('New email Test',html,emailids[1])
-    sesmail('New email Test',html,emailids[2])
+    #sesmail('New email Test',html,emailids[2])
+    print(DictTotal)
 
     
-def parse_sqldump(bucket,key):
-    ThisMonth = datetime.datetime.today().strftime("%m/%Y")
+def parse_sqldump(bucket,key,ThisMonth):
     MonthData = {}
     stream = s3.get_object(Bucket=bucket,Key=key)
     tmpfile = io.BytesIO()
@@ -224,6 +248,7 @@ def parse_sqldump(bucket,key):
                             MonthData[date]['Close Balance'] = []
                             MonthData[date]['NVN'] = []
                             MonthData[date]['MVK'] = []
+                            MonthData[date]['VSH'] = []
                             MonthData[date]['Open Balance'] = []
                             MonthData[date]['Deposit'] = []
                             MonthData[date][sale.split(',')[2]].append(amount)
@@ -248,7 +273,8 @@ def lambda_handler(event, context):
 				<td>Purchases </td>
 				<td>Store Credit</td>
 				<td>NN</td>
-				<td>MH</td>
+				<td>MVK</td>
+				<td>VSH</td>
 				<td>Credit Received</td>
 				<td>Close Balance</td>
 				<td>Deposit</td>
@@ -259,14 +285,13 @@ def lambda_handler(event, context):
     if eventSource == 'aws:s3':
         bucket = event['Records'][0]['s3']['bucket']['name']
         key = event['Records'][0]['s3']['object']['key']
-        MonthData = parse_sqldump(bucket,key)
-        process_transations(tr,MonthData)
+        ThisMonth = datetime.datetime.today().strftime("%m/%Y")
+        #ThisMonth = '10/2021'
+        MonthData = parse_sqldump(bucket,key,ThisMonth)
+        process_transations(tr,MonthData,ThisMonth)
     
     #sesmail('Testing',header.replace('content',table))
     #dailyaccounts()
 
 
     return('completed')
-
-
-
