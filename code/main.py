@@ -22,6 +22,18 @@ def s3get(bucket,key):
     s3obj = stream['Body'].read()
     return(s3obj)
 
+def s3put(html,bucket,key):
+    html = '''<html >
+    <head>
+        <title>Malabar Essence Daily Report</title>
+    </head>
+    <body>
+        <h1>Malabar Essence Daily Report</h1> ''' + html + '''
+    </body> </html>'''
+    response = s3.put_object(Body=html,Bucket=bucket,Key=key,ContentType='text/html')
+    key = datetime.datetime.now().strftime("%B") + datetime.datetime.now().strftime("%Y") + '.html'
+    response = s3.put_object(Body=html,Bucket=bucket,Key=key,ContentType='text/html')
+    
 def sesmail(text,html,EmailId):
     # Replace sender@example.com with your "From" address.
     # This address must be verified with Amazon SES.
@@ -154,11 +166,11 @@ def process_transations(tr,MonthData,ThisMonth):
                 MonthData[rowlist[0].split()[0]][rowlist[1]].append(rowlist[2])
 
     html = '<table cellspacing=”0” cellpadding=”0” width=”640” align=”center” border=”1”>' + tr
-    print(MonthData)
+    
     #ToDay = datetime.datetime.today().strftime("%d/%m/%Y")
-    DictTotal = {'sale': [], 'purchase': [], 'expense': [], 'deposit': [], 'diff': [], 'mvk': [], 'nvn': [], 'vsh': []}
+    DictTotal = {'sale': [], 'upi': [], 'purchase': [], 'expense': [], 'deposit': [], 'diff': [], 'sjt': [], 'vsh': [], 'remit': []}
     for key, value in MonthData.items():
-        print(key)
+        #print(key)
         newtr = tr.replace('Date',key)
         newtr = newtr.replace('Close Balance',str(sum(value['Close Balance'])))
         newtr = newtr.replace('Expenses',str(sum(value['Expense'])))
@@ -166,32 +178,48 @@ def process_transations(tr,MonthData,ThisMonth):
         newtr = newtr.replace('Deposit',str(sum(value['Deposit'])))
         newtr = newtr.replace('Open Balance',str(sum(value['Open Balance'])))
         newtr = newtr.replace('Credit Received',str(sum(value['Credit Received'])))
-        newtr = newtr.replace('Store Credit',str(sum(value['Credit'])))
+        newtr = newtr.replace('Remit',str(sum(value['Remit'])))
         newtr = newtr.replace('Sale',str(round(sum(value['Cash'] + value['UPI'] + value['Due']),2)))
         newtr = newtr.replace('UPI',str(round(sum(value['UPI']),2)))
         newtr = newtr.replace('Due',str(round(sum(value['Due']),2)))
         newtr = newtr.replace('Payments',str(round(sum(value['Cash']),2)))
-        newtr = newtr.replace('NVN',str(sum(value['NVN'])))
-        newtr = newtr.replace('MVK',str(sum(value['MVK'])))
         newtr = newtr.replace('VSH',str(sum(value['VSH'])))
+        newtr = newtr.replace('SJT',str(sum(value['SJT'])))
         
-        ActualCash = sum(value['Open Balance'] + value['Cash'] + value['Credit Received']) - sum(value['Expense'] + value['NVN'] + value['MVK'] + value['VSH'])
+        ActualCash = sum(value['Open Balance'] + value['Cash'] + value['Credit Received']) - sum(value['Expense'] + value['SJT'] + value['VSH'])
         Cashdiff = sum(value['Close Balance']) - ActualCash
         newtr = newtr.replace('Diff',str(round(Cashdiff,2)))
         
         html = html + newtr
         
         DictTotal['sale'].append(round(sum(value['Cash'] + value['UPI'] + value['Due']),2))
+        DictTotal['upi'].append(sum(value['UPI']))
+        DictTotal['remit'].append(sum(value['Remit']))
         DictTotal['purchase'].append(sum(value['Purchase']))
         DictTotal['expense'].append(sum(value['Expense']))
         DictTotal['deposit'].append(sum(value['Deposit']))
         if Cashdiff < 0:
             DictTotal['diff'].append(round(Cashdiff,2))
-        DictTotal['mvk'].append(sum(value['MVK']))
-        DictTotal['nvn'].append(sum(value['NVN']))
+        DictTotal['sjt'].append(sum(value['SJT']))
         DictTotal['vsh'].append(sum(value['VSH']))
     
-    pl = sum(DictTotal['sale']) - sum(DictTotal['purchase'] + DictTotal['expense'] + DictTotal['mvk'] + DictTotal['nvn'] + DictTotal['vsh'])
+    print(MonthData)
+    print(DictTotal)
+    
+    #Number of working days
+    nwd = len(MonthData)
+    
+    #Number of leaves employees availed.
+    vshl = list(map(str,DictTotal['vsh'])).count('0.0')
+    sjtl = list(map(str,DictTotal['sjt'])).count('0.0')
+    
+    #Payment to be made to employees
+    vsh2pay = (nwd - vshl) * 500 - sum(DictTotal['vsh'])
+    sjt2pay = (nwd - sjtl) * 200 - sum(DictTotal['sjt'])
+    
+    pft = sum(DictTotal['sale']) - sum(DictTotal['purchase'] + DictTotal['expense'] + DictTotal['vsh'] + DictTotal['sjt'])
+    
+    BnkBal = sum(DictTotal['remit'] + DictTotal['upi'])
         
     html = html + '</table>'
     html = html + '<table cellspacing=”0” cellpadding=”0” align=”left” border=”1”>'
@@ -199,18 +227,19 @@ def process_transations(tr,MonthData,ThisMonth):
     html = html + '<tr><td><h2>Total Purchase</h2></td><td><h2>' + str(sum(DictTotal['purchase'])) + '</h2></td></tr>'
     html = html + '<tr><td><h2>Total Expense</h2></td><td><h2>' + str(sum(DictTotal['expense'])) + '</h2></td></tr>'
     html = html + '<tr><td><h2>Total Deposit</h2></td><td><h2>' + str(sum(DictTotal['deposit'])) + '</h2></td></tr>'
-    html = html + '<tr><td><h2>Total MVK</h2></td><td><h2>' + str(sum(DictTotal['mvk'])) + '</h2></td></tr>'
-    html = html + '<tr><td><h2>Total NVN</h2></td><td><h2>' + str(sum(DictTotal['nvn'])) + '</h2></td></tr>'
-    html = html + '<tr><td><h2>Total VSH</h2></td><td><h2>' + str(sum(DictTotal['vsh'])) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total VSH</h2></td><td><h2>' + str(sum(DictTotal['vsh'])) + '/' + str(vshl) + 'L,Bal-'+ str(vsh2pay) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total SJT</h2></td><td><h2>' + str(sum(DictTotal['sjt'])) + '/' + str(sjtl) + 'L,Bal-'+ str(sjt2pay) + '</h2></td></tr>'
+    html = html + '<tr><td><h2>Total BnkBal</h2></td><td><h2>' + str(round(BnkBal,2)) + '</h2></td></tr>'
     html = html + '<tr><td><h2>Total Diff</h2></td><td><h2>' + str(sum(DictTotal['diff'])) + '</h2></td></tr>'
     #html = html + '<tr><td><h2>Profit/Loss</h2></td><td><h2>' + str(round(pl,2)) + '</h2></td></tr>'
     html = html + '</table>'
     
-    sesmail('New email Test',html,emailids[1])
+    #sesmail('New email Test',html,emailids[0])
+    #sesmail('New email Test',html,emailids[1])
     #sesmail('New email Test',html,emailids[2])
-    print(DictTotal)
+    #sesmail('New email Test',html,emailids[3])
+    s3put(html,'xlsreport-test-www','index.html')
 
-    
 def parse_sqldump(bucket,key,ThisMonth):
     MonthData = {}
     stream = s3.get_object(Bucket=bucket,Key=key)
@@ -240,12 +269,14 @@ def parse_sqldump(bucket,key,ThisMonth):
                             MonthData[date]['Cash'] = []
                             MonthData[date]['Due'] = []
                             MonthData[date]['UPI'] = []
+                            MonthData[date]['Remit'] = []
                             MonthData[date]['Expense'] = []
                             MonthData[date]['Purchase'] = []
                             MonthData[date]['Credit'] = []
                             MonthData[date]['Credit Received'] = []
                             MonthData[date]['Sales'] = []
                             MonthData[date]['Close Balance'] = []
+                            MonthData[date]['SJT'] = []
                             MonthData[date]['NVN'] = []
                             MonthData[date]['MVK'] = []
                             MonthData[date]['VSH'] = []
@@ -270,10 +301,9 @@ def lambda_handler(event, context):
 				<td>UPI</td>
 				<td>Due</td>
 				<td>Expenses</td>
-				<td>Purchases </td>
-				<td>Store Credit</td>
-				<td>NN</td>
-				<td>MVK</td>
+				<td>Purchases</td>
+				<td>Remit</td>
+				<td>SJT</td>
 				<td>VSH</td>
 				<td>Credit Received</td>
 				<td>Close Balance</td>
@@ -286,12 +316,11 @@ def lambda_handler(event, context):
         bucket = event['Records'][0]['s3']['bucket']['name']
         key = event['Records'][0]['s3']['object']['key']
         ThisMonth = datetime.datetime.today().strftime("%m/%Y")
-        #ThisMonth = '10/2021'
+        #ThisMonth = '03/2022'
         MonthData = parse_sqldump(bucket,key,ThisMonth)
         process_transations(tr,MonthData,ThisMonth)
     
     #sesmail('Testing',header.replace('content',table))
     #dailyaccounts()
-
 
     return('completed')

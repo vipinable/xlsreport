@@ -40,6 +40,14 @@ Resources:
             Uri: !Sub >-
               arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${LambdaApp{{ sceptre_user_data.AppName }}.Arn}/invocations
 
+    ApiDeployment:
+        DependsOn: ProxyResourceANY
+        Type: 'AWS::ApiGateway::Deployment'
+        Properties:
+          RestApiId: !Ref ApiGw{{ sceptre_user_data.AppName }}
+          Description: Deployment
+          StageName: test
+
     LambdaApp{{ sceptre_user_data.AppName }}:
         Type: AWS::Serverless::Function
         Properties:
@@ -50,7 +58,7 @@ Resources:
                Variables:
                   Environment: {{ sceptre_user_data.EnvName }}
                   SNSTOPIC: !Ref SNSTopic4xlsreport
-           CodeUri: s3://xlsreport-test-codebucket/src/xlsreport-fd3dd643.zip
+           CodeUri: s3://xlsreport-test-codebucket/src/xlsreport-bfdb867a.zip
            Runtime: python3.8
            Timeout: 180
            MemorySize: 128
@@ -71,9 +79,12 @@ Resources:
                   Effect: Allow
                   Action:
                   - s3:GetObject
+                  - s3:PutObject
                   Resource: 
                   - 'arn:aws:s3:::{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}-codebucket'
                   - 'arn:aws:s3:::{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}-codebucket/*'
+                  - 'arn:aws:s3:::{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}-www'
+                  - 'arn:aws:s3:::{{ sceptre_user_data.AppName }}-{{ sceptre_user_data.EnvName }}-www/*'
            Layers:
            - !Ref Pandaslibs
            Events:
@@ -149,6 +160,47 @@ Resources:
             Value: Public
         VersioningConfiguration:
           Status: Suspended
+
+    Cloudfrontoriginaccessidentity:
+      Type: AWS::CloudFront::CloudFrontOriginAccessIdentity
+      Properties:
+        CloudFrontOriginAccessIdentityConfig:
+          Comment: string-value
+
+    Cloudfront:
+      Type: AWS::CloudFront::Distribution
+      Properties:
+        DistributionConfig:
+            Origins:
+             - Id: xlsreport-test-www
+               DomainName: xlsreport-test-www.s3.us-east-1.amazonaws.com
+               S3OriginConfig:
+                 OriginAccessIdentity: !Join ["",["origin-access-identity/cloudfront/",!Ref Cloudfrontoriginaccessidentity]]
+            DefaultRootObject: index.html
+            DefaultCacheBehavior:
+                ViewerProtocolPolicy: redirect-to-https
+                AllowedMethods:
+                    - GET
+                    - HEAD
+                    - OPTIONS
+                    - PUT
+                    - POST
+                    - PATCH
+                    - DELETE
+                CachedMethods:
+                    - GET
+                    - HEAD
+                ForwardedValues:
+                    QueryString: true
+                    Cookies:
+                        Forward: all
+                TargetOriginId: xlsreport-test-www
+            Enabled: true
+            HttpVersion: http2
+            ViewerCertificate:
+                AcmCertificateArn: arn:aws:acm:us-east-1:731685434595:certificate/e2803f4f-7240-4f20-8fab-510f8a833e15
+                MinimumProtocolVersion: TLSv1.2_2021
+                SslSupportMethod: sni-only
 
 Outputs:
   StackVPC:

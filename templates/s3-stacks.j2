@@ -40,15 +40,20 @@ Resources:
         AccessControl: BucketOwnerFullControl
         LifecycleConfiguration:
           Rules:
-           -  AbortIncompleteMultipartUpload:
+           -  Id: dailyBkpRule
+              AbortIncompleteMultipartUpload:
                 DaysAfterInitiation: 7
-              NoncurrentVersionExpirationInDays: 7
-              ExpirationInDays: 90
+              NoncurrentVersionExpirationInDays: 1
+              ExpirationInDays: 7
               Status: Enabled
               Prefix: dailybkp
-              Transitions:
-               -  StorageClass: STANDARD_IA
-                  TransitionInDays: 30
+           -  Id: hrlyBkpRule
+              AbortIncompleteMultipartUpload:
+                DaysAfterInitiation: 7
+              NoncurrentVersionExpirationInDays: 1
+              ExpirationInDays: 3
+              Status: Enabled
+              Prefix: hrlybkp
         PublicAccessBlockConfiguration:
           BlockPublicAcls: true
           BlockPublicPolicy: true
