@@ -31,7 +31,10 @@ jobs:
         run: |
           python3 -m venv /tmp/py3
           source /tmp/py3/bin/activate
-          pip install 'boto3==1.15.0' 'Jinja2 == 2.11.3' 'sceptre==2.7.0' 'urllib3==1.25.11' 'PyYaml==5.4.1' 'MarkupSafe==2.0.1'
+          pip install 'boto3==1.15.0' 'Jinja2 == 2.11.3' 'sceptre==2.7.0' 'urllib3==1.25.11' 'PyYaml==5.4.1' 'MarkupSafe==2.0.1' awscli
+          #curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+          #unzip -qq awscliv2.zip
+          #aws/install
           sceptre --version
           pwd && tree && env
           sceptre launch test -y
