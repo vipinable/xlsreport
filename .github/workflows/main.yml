@@ -32,3 +32,5 @@ jobs:
           source /tmp/py3/bin/activate
           pip install 'boto3==1.15.0' 'Jinja2 == 2.11.3' 'sceptre==2.7.0' 'urllib3==1.25.11' 'PyYaml==5.4.1' 'MarkupSafe==2.0.1'
           sceptre --version
+          pwd && tree
+          
